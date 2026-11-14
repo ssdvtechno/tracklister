@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            asset: Tracklister-Windows-x64.zip
+            built: dist/Tracklister-Windows.zip
+          - os: macos-latest
+            label: macOS (Apple Silicon)
+            asset: Tracklister-macOS-AppleSilicon.zip
+            built: dist/Tracklister-macOS.zip
+          - os: macos-15-intel
+            label: macOS (Intel)
+            asset: Tracklister-macOS-Intel.zip
+            built: dist/Tracklister-macOS.zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: python -m pip install -r requirements.txt pyinstaller pytest
+      - name: Test
+        run: python -m pytest -q
+      - name: Build
+        run: python build.py --zip
+      - name: Rename
+        shell: bash
+        run: mv "${{ matrix.built }}" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*.zip
+          generate_release_notes: true
+          body: |
+            ## Download
+
+            | System | File |
+            | --- | --- |
+            | Windows 10/11 | **Tracklister-Windows-x64.zip** → unzip → run `Tracklister.exe` |
+            | Mac with Apple chip (M1 or newer) | **Tracklister-macOS-AppleSilicon.zip** |
+            | Mac with Intel chip | **Tracklister-macOS-Intel.zip** |
+
+            The builds aren't code-signed, so the first launch shows a warning:
+            - **Windows:** "Windows protected your PC" → **More info** → **Run anyway**.
+            - **macOS:** right-click **Tracklister.app** → **Open** → **Open**. (Or System Settings → Privacy & Security → **Open Anyway**.)
+
+            First launch walks you through connecting Spotify (about 2 minutes, once). See the [README](https://github.com/${{ github.repository }}#readme).
