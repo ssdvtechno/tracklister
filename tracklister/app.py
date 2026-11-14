@@ -227,7 +227,33 @@ def _friendly(exc: Exception) -> str:
     return msg
 
 
+def _selftest() -> int:
+    """Used by CI on the frozen app: load every module and the GUI backend, then exit."""
+    import importlib
+
+    import webview  # noqa: F401
+    import yt_dlp  # noqa: F401
+
+    backend = {"darwin": "webview.platforms.cocoa", "win32": "webview.platforms.winforms"}.get(sys.platform)
+    if backend:
+        importlib.import_module(backend)
+    if sys.platform == "win32":
+        importlib.import_module("webview.platforms.edgechromium")
+    assert (_ui_dir() / "index.html").is_file(), "UI files missing"
+    assert parser.parse("0:00 A - B\n1:00 C - D") and elsewhere.search_links(parser.Track("A", "B"))
+    return 0
+
+
 def main() -> None:
+    if "--selftest" in sys.argv:
+        try:
+            code = _selftest()
+        except Exception as exc:  # report and fail
+            print(f"selftest failed: {exc!r}", file=sys.stderr)
+            code = 1
+        (Path.home() / ".tracklister-selftest").write_text(str(code))
+        sys.exit(code)
+
     import webview
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")

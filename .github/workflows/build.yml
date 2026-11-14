@@ -42,6 +42,16 @@ jobs:
         run: python -m pytest -q
       - name: Build
         run: python build.py --zip
+      - name: Smoke test (frozen app starts)
+        shell: bash
+        run: |
+          rm -f ~/.tracklister-selftest
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -Command "\$p = Start-Process dist/Tracklister.exe -ArgumentList '--selftest' -Wait -PassThru; exit \$p.ExitCode"
+          else
+            dist/Tracklister.app/Contents/MacOS/Tracklister --selftest
+          fi
+          test "$(cat ~/.tracklister-selftest)" = "0"
       - name: Rename
         shell: bash
         run: mv "${{ matrix.built }}" "dist/${{ matrix.asset }}"
